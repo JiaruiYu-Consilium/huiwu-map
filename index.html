@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>灰雾秘典地图</title>
+<meta name="description" content="灰雾秘典线上跑团用的标签地图。">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<img class="fog" src="./fog.webp" alt="">
+<section class="shelf" id="shelf" aria-label="书架"><h1 class="sh-title">灰雾秘典</h1><p class="sh-note">正在打开……</p></section>
+<main class="desk" hidden>
+  <div class="stage"><section class="page" id="page" aria-label="纸面"></section></div>
+  <aside class="tray" id="tray" aria-label="备用栏"></aside>
+</main>
+<noscript><p>这个页面需要 JavaScript。</p></noscript>
+<input type="file" id="file" accept="application/json" hidden>
+<script src="./app.js"></script>
+<script type="module" src="./sync.js"></script>
+</body>
+</html>

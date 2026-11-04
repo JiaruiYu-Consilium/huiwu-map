@@ -1,0 +1,14 @@
+:root {
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-ink: 20s;
+  --container: 1440px; --gutter: 64px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-tooltip: 600;
+  --color-paper: #FAF9F8; --color-paper-2: #F2F1EF; --color-paper-3: #E6E4E1;
+  --color-ink: #262626; --color-ink-2: #5A5855; --color-muted: #7F7C77;
+  --color-rule: #D8D6D2; --color-accent: #8E2A2A; --color-accent-ink: #FAF9F8; --color-focus: #8E2A2A;
+  --font-display: "Noto Serif SC", "Songti SC", serif; --font-body: "Noto Serif SC", "Songti SC", serif;
+  --font-name: "ZCOOL XiaoWei", "Noto Serif SC", serif;
+  --radius-card: 2px; --rule-hair: 1px;
+}
