@@ -1319,11 +1319,31 @@ function exportBook() {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+// 带 add 的文件只把名字和进度加进当前笔记本，原有内容不动。同名的名字只补上备注。
+function addFromFile(data) {
+  data.roster.forEach(r => {
+    if (r.kind === 'prog') { ensureProg(r.text, r.cap); return; }
+    const note = r.note || '';
+    let n = S.roster.find(x => x.kind === 'name' && x.text === r.text);
+    if (!n) {
+      n = mkName(r.text, Boolean(r.regular), note);
+      S.roster.push(n);
+    } else if (!n.note.includes(note)) {
+      n.note = n.note.trim() ? `${n.note}\n${note}` : note;
+    }
+    ensureNoteProgs(note);
+    V.sel = n.id;
+  });
+}
 $('file').addEventListener('change', ev => {
   const f = ev.target.files[0];
   if (!f) return;
   f.text().then(text => {
     const data = JSON.parse(text);
+    if (data.add && data.roster) {
+      if (window.confirm(`把「${data.title || '这份内容'}」加进这个笔记本？现在的内容不会变。`)) commit(() => addFromFile(data));
+      return;
+    }
     if (!data.pages || !data.roster) throw new Error('bad file');
     if (window.confirm(`导入「${data.title || '笔记本'}」？这个笔记本现在的内容会替换掉。`)) {
       V.sel = null;
