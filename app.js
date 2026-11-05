@@ -1319,7 +1319,13 @@ function exportBook() {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-// 带 add 的文件只把名字和进度加进当前笔记本，原有内容不动。同名的名字只补上备注。
+// 带 add 的文件只往当前笔记本里加东西，原有内容不动。同名的名字只补上备注，文件里的页一律先隐藏。
+function pageItemFrom(i) {
+  const base = { id: uid(), kind: i.kind, x: i.x, y: i.y, born: 0 };
+  if (i.kind === 'loc') return { ...base, text: i.text };
+  if (i.kind === 'prog') return { ...base, ref: ensureProg(i.text, i.cap).id };
+  return { ...base, tag: { id: uid(), boxes: null, ...i.tag } };
+}
 function addFromFile(data) {
   data.roster.forEach(r => {
     if (r.kind === 'prog') { ensureProg(r.text, r.cap); return; }
@@ -1334,6 +1340,14 @@ function addFromFile(data) {
     ensureNoteProgs(note);
     V.sel = n.id;
   });
+  (data.pages || []).forEach(p => {
+    const pg = { ...mkPage(), hidden: true };
+    pg.tray = (p.tray || []).map(t => tagFrom(classify(t)));
+    pg.items = (p.items || []).map(pageItemFrom);
+    placeRegulars(pg, S.roster);
+    S.pages.push(pg);
+    S.pageIdx = S.pages.length - 1;
+  });
 }
 $('file').addEventListener('change', ev => {
   const f = ev.target.files[0];
@@ -1341,7 +1355,8 @@ $('file').addEventListener('change', ev => {
   f.text().then(text => {
     const data = JSON.parse(text);
     if (data.add && data.roster) {
-      if (window.confirm(`把「${data.title || '这份内容'}」加进这个笔记本？现在的内容不会变。`)) commit(() => addFromFile(data));
+      const extra = data.pages && data.pages.length ? '新的一页是隐藏的，玩家看不到。' : '';
+      if (window.confirm(`把「${data.title || '这份内容'}」加进这个笔记本？${extra}现在的内容不会变。`)) commit(() => addFromFile(data));
       return;
     }
     if (!data.pages || !data.roster) throw new Error('bad file');

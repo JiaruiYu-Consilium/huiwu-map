@@ -3,8 +3,8 @@
  * nav: the page foot and the narrator tray · signature: tags settling on a fogged sheet · states: empty page, empty tray, full, peeking
  * axes: paper/serif/oxblood · posture: quiet · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4 · weakest: E, the tray holds a lot in one column, so headings stay quiet and the page keeps the attention */
-@import url("./tokens.css?v=5");
-@import url("./base.css?v=5");
+@import url("./tokens.css?v=6");
+@import url("./base.css?v=6");
 
 html, body { height: 100%; }
 body { background-image: url("./paper.jpg"); background-size: 900px auto; user-select: none; }
