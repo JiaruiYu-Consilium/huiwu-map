@@ -3,8 +3,8 @@
  * nav: the page foot and the narrator tray · signature: tags settling on a fogged sheet · states: empty page, empty tray, full, peeking
  * axes: paper/serif/oxblood · posture: quiet · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4 · weakest: E, the tray holds a lot in one column, so headings stay quiet and the page keeps the attention */
-@import url("./tokens.css?v=3");
-@import url("./base.css?v=3");
+@import url("./tokens.css?v=4");
+@import url("./base.css?v=4");
 
 html, body { height: 100%; }
 body { background-image: url("./paper.jpg"); background-size: 900px auto; user-select: none; }
@@ -14,7 +14,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .desk { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 20rem; height: 100dvh; }
 .is-player .desk { grid-template-columns: minmax(0, 1fr); }
 .is-player .tray { display: none; }
-.stage { display: grid; place-items: center; min-width: 0; min-height: 0; padding: var(--space-md); }
+.stage { display: grid; place-items: center; min-width: 0; min-height: 0; padding: var(--space-md); overflow-y: clip; }
 
 .page { --t: max(1.28cqw, 13px); position: relative; width: min(100%, calc((100dvh - 2rem) * 1.5)); aspect-ratio: 3 / 2; container-type: inline-size; touch-action: none; }
 
@@ -32,7 +32,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 
 .name { font-family: var(--font-name); color: var(--color-ink); line-height: 1.2; }
 .name .nm { display: block; width: fit-content; font-size: max(2.1cqw, 16px); white-space: nowrap; }
-.name.acted .nm { color: var(--color-muted); }
+.name.acted .nm { color: color-mix(in oklab, var(--color-muted) 62%, var(--color-paper)); }
 .name.sel .nm { text-decoration: underline; text-decoration-color: var(--color-ink); text-decoration-thickness: 1px; text-underline-offset: 0.26em; }
 .name.target .nm, .tg.target > .tl { text-decoration: underline; text-decoration-color: var(--color-accent); text-decoration-thickness: 1px; text-underline-offset: 0.26em; }
 .tl { position: relative; display: inline-block; white-space: nowrap; }
@@ -79,8 +79,11 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .foot button { border: 0; background: none; color: inherit; padding: var(--space-3xs) var(--space-xs); min-width: 24px; min-height: 24px; cursor: pointer; font-size: inherit; }
 .foot button:hover { color: var(--color-ink); }
 .foot .pager { display: flex; align-items: center; gap: var(--space-3xs); font-variant-numeric: tabular-nums; }
-.foot .notice button, .foot .peek button { text-decoration: underline; text-underline-offset: 0.25em; color: var(--color-ink); padding-inline: var(--space-2xs); }
-.foot .round { display: flex; align-items: center; gap: var(--space-xs); }
+.foot .notice button, .foot .peek button, .foot .hid button { text-decoration: underline; text-underline-offset: 0.25em; color: var(--color-ink); padding-inline: var(--space-2xs); }
+.foot .round { position: relative; display: flex; align-items: center; gap: var(--space-xs); }
+.foot .round .reset { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); white-space: nowrap; }
+.js .foot .round .reset { opacity: 0; }
+.js .foot .round:hover .reset, .js .foot .round .reset:focus-visible { opacity: 1; }
 
 .inl { position: absolute; z-index: var(--z-dropdown); appearance: none; max-width: 70cqw; padding: 0; border: 0; box-shadow: 0 1px 0 var(--color-accent); border-radius: 0; background: transparent; color: var(--color-ink); font-size: var(--t); line-height: 1.5; font-family: var(--font-body); user-select: text; }
 .inl:focus-visible { outline: none; }
@@ -152,6 +155,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .desk[hidden], .shelf[hidden] { display: none; }
 .foot .ttl[data-act] { cursor: text; }
 .foot .off { color: var(--color-accent); }
+.foot .hid { color: var(--color-accent); }
 .is-off .page .it { cursor: default; }
 
 .shelf { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-md); width: min(100% - 2 * var(--space-lg), 36rem); margin-inline: auto; padding-block: 18dvh var(--space-xl); }

@@ -35,8 +35,9 @@ function canon(v) {
 }
 
 function publicOf() {
+  const shown = S.pages.filter(p => !p.hidden);
   const placed = new Set();
-  S.pages.forEach(p => p.items.forEach(i => { if (i.ref) placed.add(i.ref); }));
+  shown.forEach(p => p.items.forEach(i => { if (i.ref) placed.add(i.ref); }));
   const held = S.del.pub && S.del.pub.item && S.del.pub.item.ref;
   if (held) placed.add(held);
   const names = {};
@@ -47,14 +48,14 @@ function publicOf() {
     else progs[r.id] = { id: r.id, kind: 'prog', text: r.text, cap: r.cap, ticks: r.ticks };
   });
   const pages = {};
-  S.pages.forEach(p => {
+  shown.forEach(p => {
     const items = {};
     p.items.forEach(i => { items[i.id] = i; });
     pages[p.id] = { items };
   });
-  const cur = S.pages[S.pageIdx];
+  S.pubPage = publicPageId();
   return {
-    state: { title: S.title, round: S.round, spot: S.spot, pageId: cur && cur.id, pageIds: S.pages.map(p => p.id) },
+    state: { title: S.title, round: S.round, spot: S.spot, pageId: S.pubPage, pageIds: shown.map(p => p.id) },
     pages, names, progs, del: S.del.pub,
   };
 }
@@ -79,7 +80,8 @@ function flatten(pub) {
 function privateOf() {
   const trays = {};
   S.pages.forEach(p => { trays[p.id] = p.tray; });
-  return canon({ title: S.title, roster: S.roster, trays, delPriv: S.del.priv, delPage: S.del.page }) || {};
+  const hiddenPages = S.pages.filter(p => p.hidden).map(p => ({ id: p.id, items: p.items }));
+  return canon({ title: S.title, roster: S.roster, trays, delPriv: S.del.priv, delPage: S.del.page, pageOrder: S.pages.map(p => p.id), hiddenPages }) || {};
 }
 
 function normalizeRoster(list) {
@@ -95,20 +97,35 @@ function normalizeRoster(list) {
 }
 
 /* ---------- 合并远端的内容 ---------- */
+// 远端只有公开的页，所以把隐藏页按原来的前后关系插回去。
+function withHidden(shown, before) {
+  const out = [...shown];
+  before.forEach((p, i) => {
+    if (p.hidden) out.splice(i > 0 ? out.findIndex(x => x.id === before[i - 1].id) + 1 : 0, 0, p);
+  });
+  return out;
+}
 function applyRemote(val) {
   const v = val || {};
   const st = v.state || {};
   if (st.pageIds && st.pageIds.length) {
-    const old = new Map(S.pages.map(p => [p.id, p]));
-    S.pages = st.pageIds.map(id => {
+    const before = S.pages;
+    const here = before[S.pageIdx];
+    const old = new Map(before.map(p => [p.id, p]));
+    const shown = st.pageIds.filter(id => !(old.get(id) && old.get(id).hidden)).map(id => {
       const items = Object.values((v.pages && v.pages[id] && v.pages[id].items) || {});
       items.sort((a, b) => (a.born || 0) - (b.born || 0) || (a.id < b.id ? -1 : 1));
       return { id, tray: (old.get(id) && old.get(id).tray) || [], items };
     });
-    S.pageIdx = Math.max(0, st.pageIds.indexOf(st.pageId));
+    S.pages = APP.role === 'mc' ? withHidden(shown, before) : shown;
+    S.pubPage = st.pageId;
+    // 叙述者留在隐藏页上准备时，不跟着公开的页走。
+    const stay = here && here.hidden ? S.pages.indexOf(here) : -1;
+    S.pageIdx = stay >= 0 ? stay : Math.max(0, S.pages.findIndex(p => p.id === st.pageId));
   }
+  S.pageIdx = Math.max(0, S.pageIdx);
   S.title = st.title || S.title;
-  S.round = st.round || 1;
+  S.round = st.round ?? 1;
   S.spot = st.spot || null;
   S.del.pub = v.del || null;
   const names = v.names || {};
@@ -135,6 +152,8 @@ function applyRemote(val) {
 let lastFlat = {};
 let pending = null;
 let privTimer = null;
+let lastHidden = '';
+const hiddenKey = () => S.pages.filter(p => p.hidden).map(p => p.id).join();
 const busy = () => Boolean(D) || Boolean(pageEl.querySelector('.inl'));
 
 function pushNow() {
@@ -144,10 +163,19 @@ function pushNow() {
     if (flat[k] !== lastFlat[k]) upd[`live/${bookId}/${k}`] = flat[k] === undefined ? null : JSON.parse(flat[k]);
   });
   lastFlat = flat;
+  // 隐藏或者放出一页时，公开和私人两边要一起写，中途断线也不会丢掉这一页。
+  let privDone = false;
+  if (APP.role === 'mc' && user && hiddenKey() !== lastHidden) {
+    lastHidden = hiddenKey();
+    upd[`mc/${user.uid}/books/${bookId}`] = privateOf();
+    clearTimeout(privTimer);
+    privTimer = null;
+    privDone = true;
+  }
   if (Object.keys(upd).length) {
     update(ref(db), upd).catch(e => console.error('写入失败', e.code || e.message));
   }
-  if (APP.role === 'mc') schedulePrivate();
+  if (APP.role === 'mc' && !privDone) schedulePrivate();
 }
 function schedulePrivate() {
   clearTimeout(privTimer);
@@ -197,7 +225,13 @@ async function openBook(role) {
     const priv = snap.val() || {};
     S.title = priv.title || S.title;
     S.roster = normalizeRoster(priv.roster);
-    S.pages = Object.entries(priv.trays || {}).map(([id, tray]) => ({ id, tray: tray || [], items: [] }));
+    const trays = priv.trays || {};
+    const hid = new Map((priv.hiddenPages || []).map(p => [p.id, p]));
+    S.pages = (priv.pageOrder || Object.keys(trays)).map(id => (
+      hid.has(id) ? { id, hidden: true, tray: trays[id] || [], items: hid.get(id).items || [] } : { id, tray: trays[id] || [], items: [] }
+    ));
+    S.pageIdx = -1;
+    lastHidden = hiddenKey();
     S.del.priv = priv.delPriv || null;
     S.del.page = priv.delPage || null;
   }
@@ -216,6 +250,7 @@ async function openBook(role) {
       return;
     }
     if (busy()) { pending = val; return; }
+    pending = null;
     takeRemote(val);
   }, () => {
     message('没有这个笔记本，请向叙述者确认链接。');

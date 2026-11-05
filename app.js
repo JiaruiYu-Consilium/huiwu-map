@@ -44,6 +44,12 @@ function commit(fn) {
   render();
 }
 
+// 新的一轮开始：红点回到页脚，所有名字的已行动记号清除。
+function clearActed() {
+  S.spot = null;
+  S.roster.forEach(x => { if (x.kind === 'name') x.acted = false; });
+}
+
 const shownIdx = () => (V.peek === null ? S.pageIdx : V.peek);
 const cur = () => S.pages[shownIdx()];
 const readOnly = () => shownIdx() !== S.pageIdx || !APP.online;
@@ -144,12 +150,14 @@ const countKids = t => (t.attached || []).reduce((n, a) => n + 1 + countKids(a),
 const ownerById = id => entry(id) || (findTag(id) || {}).tag;
 
 /* ---------- 删除和还原 ---------- */
+// 隐藏页上删除的内容不能放进公开的那一格，否则玩家会看到被删的文字。
+const delSlot = () => (cur().hidden ? 'priv' : 'pub');
 function removeFound(found) {
   if (found.item) {
-    S.del.pub = { type: 'item', label: label(found.tag), pageId: cur().id, item: found.item };
+    S.del[delSlot()] = { type: 'item', label: label(found.tag), pageId: cur().id, item: found.item };
     cur().items = cur().items.filter(i => i !== found.item);
   } else {
-    S.del.pub = { type: 'att', label: label(found.tag), nid: found.owner.id, tag: found.tag };
+    S.del[delSlot()] = { type: 'att', label: label(found.tag), nid: found.owner.id, tag: found.tag };
     found.owner.attached = found.owner.attached.filter(a => a !== found.tag);
   }
 }
@@ -157,9 +165,9 @@ function deleteItem(iid) {
   const it = cur().items.find(i => i.id === iid);
   if (!it) return;
   const text = it.kind === 'tag' ? label(it.tag) : it.kind === 'loc' ? it.text : (entry(it.ref) || {}).text || '';
-  S.del.pub = { type: 'item', label: text, pageId: cur().id, item: it };
+  S.del[delSlot()] = { type: 'item', label: text, pageId: cur().id, item: it };
   cur().items = cur().items.filter(i => i !== it);
-  if (it.kind === 'name' && S.spot === it.ref) S.spot = null;
+  if (it.kind === 'name' && S.spot === it.ref && !cur().hidden) S.spot = null;
 }
 function deleteRoster(rid) {
   const r = entry(rid);
@@ -190,12 +198,17 @@ function restore(which) {
   S.del[which] = null;
 }
 function deletePage() {
-  if (S.pages.length < 2) return;
+  if (S.pages.length < 2 || isLastShown(S.pages[S.pageIdx])) return;
   const i = S.pageIdx;
+  const table = publicPageId();
   const [page] = S.pages.splice(i, 1);
   S.del.page = { label: `第 ${i + 1} 页`, page, idx: i };
-  S.pageIdx = Math.max(0, i - 1);
-  S.spot = null;
+  if (page.hidden) {
+    S.pageIdx = S.pages.findIndex(p => p.id === table);
+  } else {
+    S.pageIdx = Math.max(0, i - 1);
+    S.spot = null;
+  }
 }
 function restorePage() {
   const d = S.del.page;
@@ -203,6 +216,33 @@ function restorePage() {
   S.pages.splice(d.idx, 0, d.page);
   S.pageIdx = d.idx;
   S.del.page = null;
+}
+
+/* ---------- 隐藏页 ---------- */
+// 隐藏页只存在私人区域，玩家读不到。叙述者在隐藏页上准备时，全桌留在最后一个公开的页。至少留一页公开。
+const shownPages = () => S.pages.filter(p => !p.hidden);
+const isLastShown = p => !p.hidden && shownPages().length < 2;
+function publicPageId() {
+  const here = S.pages[S.pageIdx];
+  if (here && !here.hidden) return here.id;
+  const shown = shownPages();
+  if (shown.some(p => p.id === S.pubPage)) return S.pubPage;
+  const before = S.pages.slice(0, S.pageIdx).reverse().find(p => !p.hidden);
+  return (before || shown[0] || {}).id;
+}
+function toggleHidden() {
+  const p = S.pages[S.pageIdx];
+  if (p.hidden) {
+    delete p.hidden;
+  } else {
+    if (isLastShown(p)) return;
+    p.hidden = true;
+    if (S.del.pub && S.del.pub.pageId === p.id) {
+      S.del.priv = S.del.pub;
+      S.del.pub = null;
+    }
+  }
+  S.spot = null;
 }
 
 /* ---------- 渲染工具 ---------- */
@@ -451,7 +491,7 @@ function itemEl(it) {
     e.appendChild(nm);
     inkify(nm, it.born);
     r.attached.forEach(t => e.appendChild(attEl(t)));
-    if (S.spot === r.id) e.appendChild(h('span', 'dot'));
+    if (S.spot === r.id && !cur().hidden) e.appendChild(h('span', 'dot'));
   } else {
     const r = entry(it.ref);
     e = h('div', 'it prog', r.text + `（${r.cap}）`);
@@ -486,6 +526,11 @@ function renderPage() {
   pager.appendChild(h('span', '', `${shownIdx() + 1} / ${S.pages.length}`));
   pager.appendChild(btn('', 'next-page', '›', { 'aria-label': '下一页' }));
   foot.appendChild(pager);
+  if (!isPlayer() && cur().hidden) {
+    const n = h('span', 'hid', '玩家看不到这一页，');
+    n.appendChild(btn('', 'toggle-hidden', '放出来'));
+    foot.appendChild(n);
+  }
   if (!APP.online) {
     foot.appendChild(h('span', 'off', '已断线，恢复以前不能修改'));
   } else if (readOnly()) {
@@ -499,8 +544,9 @@ function renderPage() {
   }
   foot.appendChild(h('span', 'sp'));
   const round = h('span', 'round');
-  if (!(S.spot && onPage(S.spot)) && !isPlayer()) round.appendChild(h('span', 'dot'));
+  if (!(S.spot && onPage(S.spot)) && !isPlayer() && !cur().hidden) round.appendChild(h('span', 'dot'));
   round.appendChild(h('span', '', `第 ${S.round} 轮`));
+  if (!isPlayer() && !readOnly()) round.appendChild(btn('reset', 'reset-round', '归零', { 'aria-label': '把轮数归零' }));
   foot.appendChild(round);
   pageEl.appendChild(foot);
   if (V.paint) pageEl.appendChild(paintBarEl());
@@ -648,8 +694,14 @@ function renderTray() {
   row.appendChild(btn('btn', 'next-round', '下一轮'));
   row.appendChild(btn('btn', 'new-page', '新建一页'));
   ctl.appendChild(row);
+  const here = S.pages[S.pageIdx];
+  const pageRow = h('div', 'less-row');
+  pageRow.appendChild(btn('', 'new-hidden-page', '新建隐藏页'));
+  if (here.hidden) pageRow.appendChild(btn('', 'toggle-hidden', '放出这一页'));
+  else if (!isLastShown(here)) pageRow.appendChild(btn('', 'toggle-hidden', '隐藏这一页'));
+  if (S.pages.length > 1 && !isLastShown(here)) pageRow.appendChild(btn('', 'del-page', '删除这一页'));
+  ctl.appendChild(pageRow);
   const less = h('div', 'less-row');
-  if (S.pages.length > 1) less.appendChild(btn('', 'del-page', '删除这一页'));
   less.appendChild(btn('', 'copy-link', V.copied ? '已复制' : '复制玩家链接'));
   less.appendChild(btn('', 'view-player', '玩家的画面'));
   less.appendChild(btn('', 'export', '导出'));
@@ -859,8 +911,7 @@ document.addEventListener('click', ev => {
     }),
     'next-round': () => commit(() => {
       S.round += 1;
-      S.spot = null;
-      S.roster.forEach(x => { if (x.kind === 'name') x.acted = false; });
+      clearActed();
     }),
     'new-page': () => commit(() => {
       const pg = mkPage();
@@ -869,7 +920,18 @@ document.addEventListener('click', ev => {
       S.pageIdx = S.pages.length - 1;
       S.spot = null;
     }),
+    'new-hidden-page': () => commit(() => {
+      const pg = { ...mkPage(), hidden: true };
+      placeRegulars(pg, S.roster);
+      S.pages.push(pg);
+      S.pageIdx = S.pages.length - 1;
+    }),
+    'toggle-hidden': () => commit(toggleHidden),
     'tgl-regular': () => commit(() => { r.regular = !r.regular; }),
+    'reset-round': () => commit(() => {
+      S.round = 0;
+      clearActed();
+    }),
     'tgl-acted': () => commit(() => { r.acted = !r.acted; }),
     'edit-note': () => {
       if (ev.target.closest('.chip')) return;
@@ -906,7 +968,12 @@ function stepPage(d) {
     V.peek = n === S.pageIdx ? null : n;
     render();
   } else {
-    commit(() => { S.pageIdx = n; S.spot = null; });
+    commit(() => {
+      const table = publicPageId();
+      S.pageIdx = n;
+      // 全桌真的翻到别的页时才收回红点，叙述者进出隐藏页不影响玩家。
+      if (!S.pages[n].hidden && S.pages[n].id !== table) S.spot = null;
+    });
   }
 }
 document.addEventListener('keydown', ev => {
